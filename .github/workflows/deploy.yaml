@@ -1,4 +1,3 @@
-# .github/workflows/deploy.yaml
 name: Build CI/CD
 
 on:
@@ -8,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Test job to run Go tests
+  # 1 Test job
   test:
     runs-on: ubuntu-latest
     steps:
@@ -26,11 +25,10 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-  # Compile job depends on test job
+  # 2 Compile job (needs: test)
   compile:
     needs: test
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,4 +43,35 @@ jobs:
 
       - name: Compile binary
         run: go build -o myapp
+
+  # 3 Build Docker image and push to GHCR (needs: compile)
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    needs: compile
+    if: success()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: docker build -t ghcr.io/${{ github.repository }}:latest .
+
+      - name: Push Docker image
+        run: docker push ghcr.io/${{ github.repository }}:latest
 
